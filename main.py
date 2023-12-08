@@ -17,7 +17,7 @@ def select_video():
     root.withdraw()
 
     # Open a file selection dialog to choose an MP4 video file
-    file_path = filedialog.askopenfilename(filetypes=[('Video files', '*.mp4;*.mpg')])
+    file_path = filedialog.askopenfilenames(filetypes=[('Video files', '*.mp4;*.mpg')])
 
     # Return the selected file path
     return file_path
@@ -132,7 +132,10 @@ def process_video(file_path, window):
     final_clip.write_videofile(output_file, fps=fps, codec='libx264', verbose=False, logger=None)
 
     # Print the total number of blue screens detected
-    sg.popup(f'Total blue screens detected: {len(unselected_clips)}', 'Video processing completed.')
+    # sg.popup(f'Total blue screens detected: {len(unselected_clips)}', 'Video processing completed.')
+
+    log_message = f'Total blue screens detected in {os.path.basename(file_paths)}: {len(unselected_clips)}'
+    window['log_box'].update(log_message + '\n', append=True)
 
     # Reset the progress bar
     window['progressbar'].UpdateBar(0)
@@ -142,11 +145,13 @@ layout = [
     [sg.Button('Select Video')],
     [sg.Button('Process Video', disabled=True)],
     [sg.ProgressBar(1000, orientation='h', size=(20, 20), key='progressbar')],
-    [sg.Exit()]
+    [sg.Text('Processing 0/0', key='file_counter')],
+    [sg.Exit()],
+    [sg.Multiline(default_text='', size=(40, 5), key='log_box')]
 ]
 
 # Create the PySimpleGUI window with the specified title and layout
-window = sg.Window('Video Processor', layout)
+window = sg.Window('BlueCut', layout)
 
 # Start the event loop
 while True:
@@ -158,21 +163,36 @@ while True:
         break
 
     # Check if the "Select Video" button is clicked
-    elif event == 'Select Video':
+    # elif event == 'Select Video':
         # Call the select_video() function to choose a video file
-        file_path = select_video()
-        if file_path:
+        # file_path = select_video()
+        # if file_path:
+            # total_files = len(file_path)
+            # for index, file_paths in enumerate(file_path, start=1):
+                # window['file_counter'].update(f'Processing {index}/{total_files}')
+                # process_video(file_paths, window)
+                # window['progressbar'].UpdateBar(0)
             # Enable the "Process Video" button if a file is selected
-            window['Process Video'].update(disabled=False)
+            # window['Process Video'].update(disabled=False)
+        # else:
+            # sg.popup_error('Please select a video file first.')
 
-    # Check if the "Process Video" button is clicked
-    elif event == 'Process Video':
-        if file_path:
-            # Call the process_video() function to process the selected video
-            process_video(file_path, window)
+    elif event == 'Select Video':
+        selected_files = select_video()
+        if selected_files:
+            window['Process Video'].update(disabled=False)
         else:
-            # Display an error message if no video file is selected
             sg.popup_error('Please select a video file first.')
+
+    elif event == 'Process Video':
+        if selected_files:
+            total_files = len(selected_files)
+            for index, file_paths in enumerate(selected_files, start=1):
+                window['file_counter'].update(f'Processing {index}/{total_files}')
+                process_video(file_paths, window)
+                window['progressbar'].UpdateBar(0)
+            # else:
+                # sg.popup_error('No video files selected.')
 
 # Close the window and end the program
 window.close()
