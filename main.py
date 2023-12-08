@@ -17,13 +17,13 @@ def select_video():
     root.withdraw()
 
     # Open a file selection dialog to choose an MP4 video file
-    file_path = filedialog.askopenfilename(filetypes=[('MP4 files', '*.mp4')])
+    file_path = filedialog.askopenfilename(filetypes=[('Video files', '*.mp4;*.mpg')])
 
     # Return the selected file path
     return file_path
 
 # Function for the process video button
-def process_video(file_path):
+def process_video(file_path, window):
     # Load the MP4 video file
     cap = cv2.VideoCapture(file_path)
 
@@ -46,6 +46,9 @@ def process_video(file_path):
     # Variables to keep track of clip selection
     start_time = None
     end_time = None
+
+    progress_bar = window['progressbar']
+    total_frames = frame_count
 
     # Loop through each frame in the video
     while cap.isOpened():
@@ -87,6 +90,9 @@ def process_video(file_path):
                         # Start of an unselected clip
                         start_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
+                progress_update = total_frames_processed * 1000 / total_frames
+                progress_bar.UpdateBar(progress_update)
+
                 # Add counter to total frames processed
                 total_frames_processed += 1
 
@@ -108,19 +114,34 @@ def process_video(file_path):
     final_clip = concatenate_videoclips(unselected_clips)
 
     # Generate the output file path
-    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-    output_file = os.path.join(desktop_path, "output.mp4")
+    # Desktop path seems to have issues on some devices for me
+    # desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+
+    directory = os.path.dirname(file_path)
+    base_name = os.path.basename(file_path)
+    file_name, file_ext = os.path.splitext(base_name)
+
+    converted_dir = os.path.join(directory, "Converted")
+    if not os.path.exists(converted_dir):
+        os.makedirs(converted_dir)
+
+    # output_file = os.path.join(directory, "output.mp4")
+    output_file = os.path.join(converted_dir, f"{file_name}_bc{file_ext}")
 
     # Write the final video to the output file
-    final_clip.write_videofile(output_file, fps=fps, verbose=False, logger=None)
+    final_clip.write_videofile(output_file, fps=fps, codec='libx264', verbose=False, logger=None)
 
     # Print the total number of blue screens detected
     sg.popup(f'Total blue screens detected: {len(unselected_clips)}', 'Video processing completed.')
+
+    # Reset the progress bar
+    window['progressbar'].UpdateBar(0)
 
 # GUI layout
 layout = [
     [sg.Button('Select Video')],
     [sg.Button('Process Video', disabled=True)],
+    [sg.ProgressBar(1000, orientation='h', size=(20, 20), key='progressbar')],
     [sg.Exit()]
 ]
 
@@ -148,7 +169,7 @@ while True:
     elif event == 'Process Video':
         if file_path:
             # Call the process_video() function to process the selected video
-            process_video(file_path)
+            process_video(file_path, window)
         else:
             # Display an error message if no video file is selected
             sg.popup_error('Please select a video file first.')
