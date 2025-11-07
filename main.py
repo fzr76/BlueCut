@@ -4,7 +4,7 @@ import os
 import cv2
 import numpy as np
 import PySimpleGUI as sg
-from moviepy.editor import VideoFileClip, concatenate_videoclips
+from moviepy import VideoFileClip, concatenate_videoclips
 
 # Function for select video button
 def select_video():
@@ -16,15 +16,24 @@ def select_video():
     root = tk.Tk()
     root.withdraw()
 
-    # Open a file selection dialog to choose an MP4 video file
-    file_path = filedialog.askopenfilenames(filetypes=[('Video files', '*.mp4;*.mpg')])
+    # Open a file selection dialog to choose video files
+    file_path = filedialog.askopenfilenames(filetypes=[
+        ('All Video files', '*.mp4;*.mpg;*.mpeg;*.avi;*.mov;*.wmv;*.mkv;*.flv;*.m4v;*.webm;*.3gp;*.ogv;*.ts;*.mts;*.m2ts'),
+        ('MP4 files', '*.mp4'),
+        ('MPEG files', '*.mpg;*.mpeg'),
+        ('AVI files', '*.avi'),
+        ('MOV files', '*.mov'),
+        ('WMV files', '*.wmv'),
+        ('MKV files', '*.mkv'),
+        ('All files', '*.*')
+    ])
 
     # Return the selected file path
     return file_path
 
 # Function for the process video button
 def process_video(file_path, window):
-    # Load the MP4 video file
+    # Load the video file
     cap = cv2.VideoCapture(file_path)
 
     # Give an error if the video could not be opened
@@ -78,7 +87,7 @@ def process_video(file_path, window):
                         end_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
                         # Add the unselected clip to the list of clips
-                        unselected_clip = VideoFileClip(file_path).subclip(start_time, end_time)
+                        unselected_clip = VideoFileClip(file_path).subclipped(start_time, end_time)
                         unselected_clips.append(unselected_clip)
 
                         # Reset the variables for the next selection
@@ -106,9 +115,23 @@ def process_video(file_path, window):
         if total_frames_processed == frame_count:
             break
 
+    # Check if we need to add the last clip (if video ends on non-blue frame)
+    if start_time is not None:
+        # Video ended while in a non-blue section
+        end_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+        unselected_clip = VideoFileClip(file_path).subclipped(start_time, end_time)
+        unselected_clips.append(unselected_clip)
+
     # Release the capture and close all windows
     cap.release()
     cv2.destroyAllWindows()
+
+    # Check if there are any clips to process
+    if not unselected_clips:
+        log_message = f'No content to save in {os.path.basename(file_path)} - video is entirely blue screens or empty'
+        window['log_box'].update(log_message + '\n', append=True)
+        window['progressbar'].UpdateBar(0)
+        return
 
     # Concatenate the unselected clips into a final video
     final_clip = concatenate_videoclips(unselected_clips)
@@ -125,17 +148,44 @@ def process_video(file_path, window):
     if not os.path.exists(converted_dir):
         os.makedirs(converted_dir)
 
-    # output_file = os.path.join(directory, "output.mp4")
-    output_file = os.path.join(converted_dir, f"{file_name}_bc{file_ext}")
+    # Determine the best codec and output format based on input format
+    output_ext = file_ext.lower()
+    codec = 'libx264'  # Default codec for most formats
+    audio_codec = 'aac'  # Default audio codec
+    
+    # Map specific formats to optimal codecs
+    if output_ext in ['.webm']:
+        codec = 'libvpx'
+        audio_codec = 'libvorbis'
+    elif output_ext in ['.wmv']:
+        codec = 'wmv2'
+        audio_codec = 'wmav2'
+    elif output_ext in ['.avi', '.mpg', '.mpeg', '.flv']:
+        # These formats can use libx264 but output as MP4 for better compatibility
+        output_ext = '.mp4'
+    
+    # For formats that might not work well, default to MP4
+    if output_ext not in ['.mp4', '.mov', '.mkv', '.avi', '.webm', '.wmv', '.m4v', '.mpg', '.mpeg']:
+        output_ext = '.mp4'
 
-    # Write the final video to the output file
-    final_clip.write_videofile(output_file, fps=fps, codec='libx264', verbose=False, logger=None)
+    output_file = os.path.join(converted_dir, f"{file_name}_bc{output_ext}")
 
-    # Print the total number of blue screens detected
-    # sg.popup(f'Total blue screens detected: {len(unselected_clips)}', 'Video processing completed.')
-
-    log_message = f'Total blue screens detected in {os.path.basename(file_paths)}: {len(unselected_clips)}'
-    window['log_box'].update(log_message + '\n', append=True)
+    # Write the final video to the output file with appropriate codec
+    try:
+        final_clip.write_videofile(output_file, fps=fps, codec=codec, audio_codec=audio_codec, logger=None)
+        log_message = f'Processed {os.path.basename(file_path)} - Removed {len(unselected_clips)} blue screen section(s)'
+        window['log_box'].update(log_message + '\n', append=True)
+    except Exception as e:
+        # If the specific codec fails, try with default MP4 settings
+        output_file = os.path.join(converted_dir, f"{file_name}_bc.mp4")
+        final_clip.write_videofile(output_file, fps=fps, codec='libx264', audio_codec='aac', logger=None)
+        log_message = f'Processed {os.path.basename(file_path)} (converted to MP4) - Removed {len(unselected_clips)} blue screen section(s)'
+        window['log_box'].update(log_message + '\n', append=True)
+    
+    # Close the clips to free memory
+    final_clip.close()
+    for clip in unselected_clips:
+        clip.close()
 
     # Reset the progress bar
     window['progressbar'].UpdateBar(0)

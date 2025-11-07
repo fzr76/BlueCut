@@ -1,5 +1,19 @@
-numpy
-opencv-python
-moviepy
-ffmpeg
-PySimpleGUI
+# BlueCut - VHS Blue Screen Removal Tool
+# Python 3.13+ compatible
+
+# Core dependencies
+numpy==2.2.6
+opencv-python==4.12.0.88
+moviepy==2.2.1
+
+# PySimpleGUI requires special installation from private PyPI server
+# Install with: python -m pip install --extra-index-url https://PySimpleGUI.net/install PySimpleGUI
+PySimpleGUI==5.0.10
+
+# MoviePy dependencies (auto-installed with moviepy)
+imageio==2.37.2
+imageio-ffmpeg==0.6.0
+decorator==5.2.1
+pillow==11.3.0
+
+# Note: ffmpeg-python is NOT needed (imageio-ffmpeg provides ffmpeg binaries)
